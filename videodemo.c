@@ -1,10 +1,10 @@
 /************************************************************************/
 /*																		*/
-/*	video_demo.c	--	ZYBO Video demonstration 						*/
+/*	video_demo.c	--	ZYBO hand detection		 						*/
 /*																		*/
 /************************************************************************/
-/*	Author: Sam Bobrowicz												*/
-/*	Copyright 2015, Digilent Inc.										*/
+/*	Author: Fan Xi & Yang Bo											*/
+/*	Copyright 2018, Fan Xi & Yang Bo									*/
 /************************************************************************/
 /*  Module Description: 												*/
 /*																		*/
@@ -15,14 +15,9 @@
 /*																		*/
 /*																		*/
 /************************************************************************/
-/*  Revision History:													*/
-/* 																		*/
-/*		11/25/2015(SamB): Created										*/
-/*																		*/
-/************************************************************************/
 
 /* ------------------------------------------------------------ */
-/*				Include File Definitions						*/
+/*					Include File Definitions					*/
 /* ------------------------------------------------------------ */
 
 #include "video_demo.h"
@@ -39,9 +34,9 @@
 #include "timer_ps/timer_ps.h"
 #include "xparameters.h"
 
-/*
- * XPAR redefines
- */
+/* ------------------------------------------------------------ */
+/* 						XPAR redefines							*/
+/* ------------------------------------------------------------ */
 #define DYNCLK_BASEADDR XPAR_AXI_DYNCLK_0_BASEADDR
 #define VGA_VDMA_ID XPAR_AXIVDMA_0_DEVICE_ID
 #define DISP_VTC_ID XPAR_VTC_0_DEVICE_ID
@@ -53,34 +48,34 @@
 #define UART_BASEADDR XPAR_PS7_UART_1_BASEADDR
 
 /* ------------------------------------------------------------ */
-/*				Global Variables								*/
+/*						Global Variables						*/
 /* ------------------------------------------------------------ */
 
-/*
- * Display and Video Driver structs
- */
+/* ------------------------------------------------------------ */
+/* 				Display and Video Driver structs				*/
+/* ------------------------------------------------------------ */
 DisplayCtrl dispCtrl;
 XAxiVdma vdma;
 VideoCapture videoCapt;
 INTC intc;
 char fRefresh; //flag used to trigger a refresh of the Menu on video detect
 
-/*
- * Framebuffers for video data
- */
+/* ------------------------------------------------------------ */
+/* 				Framebuffers for video data						*/
+/* ------------------------------------------------------------ */
 u8 frameBuf[DISPLAY_NUM_FRAMES][DEMO_MAX_FRAME];
 u8 *pFrames[DISPLAY_NUM_FRAMES]; //array of pointers to the frame buffers
 
-/*
- * Interrupt vector table
- */
+/* ------------------------------------------------------------ */
+/* 					Interrupt vector table						*/
+/* ------------------------------------------------------------ */
 const ivt_t ivt[] = {
 	videoGpioIvt(VID_GPIO_IRPT_ID, &videoCapt),
 	videoVtcIvt(VID_VTC_IRPT_ID, &(videoCapt.vtc))
 };
 
 /* ------------------------------------------------------------ */
-/*				Procedure Definitions							*/
+/*					Procedure Definitions						*/
 /* ------------------------------------------------------------ */
 
 int main(void)
@@ -92,7 +87,6 @@ int main(void)
 
 	return 0;
 }
-
 
 void DemoInitialize()
 {
@@ -179,8 +173,7 @@ void DemoRun()
 {
 	int nextFrame = 0;
 	char userInput = 0;
-	/*videoCapt.timing.HActiveVideo = 1366;
-	videoCapt.timing.VActiveVideo = 768;*/
+
 	/* Flush UART FIFO */
 	while (XUartPs_IsReceiveData(UART_BASEADDR))
 	{
@@ -209,68 +202,23 @@ void DemoRun()
 
 		switch (userInput)
 		{
+
 		case '1':
 			DemoChangeRes();
 			break;
-		case '2':
-			nextFrame = dispCtrl.curFrame + 1;
-			if (nextFrame >= DISPLAY_NUM_FRAMES)
-			{
-				nextFrame = 0;
-			}
-			DisplayChangeFrame(&dispCtrl, nextFrame);
-			break;
-		case '3':
-			DemoPrintTest(pFrames[dispCtrl.curFrame], dispCtrl.vMode.width, dispCtrl.vMode.height, DEMO_STRIDE, DEMO_PATTERN_0);
-			break;
-		case '4':
-			DemoPrintTest(pFrames[dispCtrl.curFrame], dispCtrl.vMode.width, dispCtrl.vMode.height, DEMO_STRIDE, DEMO_PATTERN_1);
-			break;
-		case '5':
-			if (videoCapt.state == VIDEO_STREAMING)
-				VideoStop(&videoCapt);
-			else
-				VideoStart(&videoCapt);
-			break;
-		case '6':
-			nextFrame = videoCapt.curFrame + 1;
-			if (nextFrame >= DISPLAY_NUM_FRAMES)
-			{
-				nextFrame = 0;
-			}
-			VideoChangeFrame(&videoCapt, nextFrame);
-			break;
 		case '7':
-		//	DisplayStart(&dispCtrl);
 			nextFrame = videoCapt.curFrame + 1;  //calculate next frame
 			if (nextFrame >= DISPLAY_NUM_FRAMES)
 			{
 				nextFrame = 0;
 			}
-			//VideoStop(&videoCapt);
 			while (1) {
-			DemoInvertFrame(pFrames[videoCapt.curFrame], pFrames[nextFrame], videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo, DEMO_STRIDE); //src frame is curframe,result is in next fame
-			//VideoStart(&videoCapt);
+			HandDetection(pFrames[videoCapt.curFrame], pFrames[nextFrame], videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo, DEMO_STRIDE); //src frame is curframe,result is in next fame
 			DisplayChangeFrame(&dispCtrl, nextFrame); //display the result frame;
 		   }
 			break;
-		case '8':
-			nextFrame = videoCapt.curFrame + 1;
-			if (nextFrame >= DISPLAY_NUM_FRAMES)
-			{
-				nextFrame = 0;
-			}
-			//VideoStop(&videoCapt);
-			DemoScaleFrame(pFrames[videoCapt.curFrame], pFrames[nextFrame], videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo, dispCtrl.vMode.width, dispCtrl.vMode.height, DEMO_STRIDE);
-			//VideoStart(&videoCapt);
-			DisplayChangeFrame(&dispCtrl, nextFrame);
-			break;
-		case 'q':
-			break;
-		case 'r':
-			break;
-		default :
-			xil_printf("\n\rInvalid Selection");
+		default:
+			xil_printf("\n\rPlease input");
 			TimerDelay(500000);
 		}
 	}
@@ -283,32 +231,154 @@ void DemoPrintMenu()
 	xil_printf("\x1B[H"); //Set cursor to top left of terminal
 	xil_printf("\x1B[2J"); //Clear terminal
 	xil_printf("**************************************************\n\r");
-	xil_printf("*                ZYBO Video Demo                 *\n\r");
+	xil_printf("*                 Hand Detection                 *\n\r");
 	xil_printf("**************************************************\n\r");
 	xil_printf("*Display Resolution: %28s*\n\r", dispCtrl.vMode.label);
 	printf("*Display Pixel Clock Freq. (MHz): %15.3f*\n\r", dispCtrl.pxlFreq);
 	xil_printf("*Display Frame Index: %27d*\n\r", dispCtrl.curFrame);
 	if (videoCapt.state == VIDEO_DISCONNECTED) xil_printf("*Video Capture Resolution: %22s*\n\r", "!HDMI UNPLUGGED!");
-	else {
-		/*videoCapt.timing.HActiveVideo = 1366;
-		videoCapt.timing.VActiveVideo = 768;*/
-		xil_printf("*Video Capture Resolution: %17dx%-4d*\n\r", videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo);
-	}
+	else xil_printf("*Video Capture Resolution: %17dx%-4d*\n\r", videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo);
 	xil_printf("*Video Frame Index: %29d*\n\r", videoCapt.curFrame);
 	xil_printf("**************************************************\n\r");
-	xil_printf("\n\r");
 	xil_printf("1 - Change Display Resolution\n\r");
-	xil_printf("2 - Change Display Framebuffer Index\n\r");
-	xil_printf("3 - Print Blended Test Pattern to Display Framebuffer\n\r");
-	xil_printf("4 - Print Color Bar Test Pattern to Display Framebuffer\n\r");
-	xil_printf("5 - Start/Stop Video stream into Video Framebuffer\n\r");
-	xil_printf("6 - Change Video Framebuffer Index\n\r");
-	xil_printf("7 - Grab Video Frame and invert colors\n\r");
-	xil_printf("8 - Grab Video Frame and scale to Display resolution\n\r");
-	xil_printf("q - Quit\n\r");
-	xil_printf("\n\r");
-	xil_printf("\n\r");
-	xil_printf("Enter a selection:");
+	xil_printf("7 - Detect Hand and Locate Hand Center\n\r");
+}
+
+//HandDetection(pFrames[videoCapt.curFrame], pFrames[nextFrame], videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo, DEMO_STRIDE); //
+void HandDetection(u8 *srcFrame, u8 *destFrame, u32 width, u32 height, u32 stride)
+{
+	//const u32 l = 100;		//source screen
+	//const u32 L = 100;		//destination screen
+
+	//u32 i;
+	u32 xhand,yhand;
+	//u32 xdst,ydst;
+	long xx,yy;
+	u32 count;
+	u8 red,green,blue,Max,Min;
+	u32 xcoi,ycoi;
+	u32 lineStart = 0;
+	xx = 0;
+	yy = 0;
+	count = 0;
+	for(ycoi = 0; ycoi < height; ycoi+=1)
+	{
+		for(xcoi = 0; xcoi < (width * 3); xcoi+=3)
+		{
+			green=srcFrame[xcoi + lineStart];
+			blue=srcFrame[xcoi + lineStart + 1];
+			red=srcFrame[xcoi + lineStart + 2];
+			if ( (red > 95) && (green > 40) && (blue > 20) && (red > blue) && (red > green) && (abs(red - green) > 15) ) {
+				if (blue >= green)
+				{
+					Max = blue;
+					Min = green;
+			    }
+				else
+				{
+					Max = green;
+					Min = blue;
+				}
+				if (red > Max)
+					Max = red;
+				else if (red < Min)
+					Min = red;
+
+				if (Max - Min > 15)
+				{
+					yy = yy + ycoi;
+					xx = xx + xcoi;
+					count = count + 1;
+					destFrame[xcoi + lineStart] = 255;     //Red
+					destFrame[xcoi + lineStart + 1] = 255; //Blue
+					destFrame[xcoi + lineStart + 2] = 255; //Green
+				}
+			}
+			else
+			{
+				//do nothing
+				destFrame[xcoi + lineStart] = 0;     //Red     //paint all black
+				destFrame[xcoi + lineStart + 1] = 0; //Blue
+				destFrame[xcoi + lineStart + 2] = 0; //Green
+			}
+
+		} // } is for loop x
+		lineStart += stride;
+	}  // } is for loop y
+
+	yhand = yy / count * stride;
+	xhand = xx / count;
+	//xil_printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
+	//xil_printf("xhand %d\r\n", xhand);
+	//xil_printf("yhand  %d\r\n", yhand );
+
+	/*	-------------------------------------------------------------------- */
+	/*	change source coordinates to expected coordinates					 */
+	/*	to ensure the hand center is in the center of the destination screen */
+	/*	-------------------------------------------------------------------- */
+	/*xdst = ((1280 - 2 * L) / (1366 - 2 * l)) * (xhand - l) + L;
+	ydst = 4 / 3 * yhand;
+
+	//Draw the center of the hand by 20 pixels
+	for (i=0;i<20;i++)
+	{
+		destFrame[xdst + ydst + 3*i -30] = 255;
+	}*/
+
+	/*	-----------------------------------------------	*/
+	/*	determine Tetris control signals				*/
+	/*	-----------------------------------------------	*/
+	const u32 w_screen = 1366;	//or 1920
+	const u32 h_screen = 768;	//or 1080
+	const u32 left_border = w_screen/3;
+	const u32 right_border = 2*w_screen/3;
+	const u32 top_border = h_screen/3;
+	const u32 bottom_border = 2*h_screen/3;
+
+	u8 signal;//Tetris control signal
+
+	u8 flag_y = (yhand > top_border) && (yhand < bottom_border);
+	u8 flag_x = (xhand > left_border) && (xhand < right_border);
+
+	if(xhand < left_border)
+	{
+		if(flag_y)
+			signal = 0;//left
+	}
+	else if(xhand > right_border)
+	{
+		if(flag_y)
+			signal = 1;//right
+	}
+	else if(yhand < top_border)
+	{
+		if(flag_x)
+			signal = 2;//top
+	}
+	else if(yhand > bottom_border)
+	{
+		if(flag_x)
+			signal = 3;//bottom
+	}
+	else
+			signal = 4;//center
+
+
+	/*	-----------------------------------------------	*/
+	/*	write the control signal to a register			*/
+	/*	-----------------------------------------------	*/
+
+
+
+
+
+
+
+	/* -----------------------------------------------------------------------	*/
+	/* Flush the framebuffer memory range to ensure changes are written to the	*/
+	/* actual memory, and therefore accessible by the VDMA.						*/
+	/* -----------------------------------------------------------------------	*/
+	Xil_DCacheFlushRange((unsigned int) destFrame, DEMO_MAX_FRAME);
 }
 
 void DemoChangeRes()
@@ -392,7 +462,7 @@ void DemoCRMenu()
 	printf("*Pixel Clock Freq. (MHz): %23.3f*\n\r", dispCtrl.pxlFreq);
 	xil_printf("**************************************************\n\r");
 	xil_printf("\n\r");
-	xil_printf("1 - %s\n\r", VMODE_640x480.label);
+	xil_printf("1 - %s\n\r", VMODE_1280x1024.label);
 	xil_printf("2 - %s\n\r", VMODE_800x600.label);
 	xil_printf("3 - %s\n\r", VMODE_1280x720.label);
 	xil_printf("4 - %s\n\r", VMODE_1280x1024.label);
@@ -400,149 +470,6 @@ void DemoCRMenu()
 	xil_printf("q - Quit (don't change resolution)\n\r");
 	xil_printf("\n\r");
 	xil_printf("Select a new resolution:");
-}
-
-//DemoInvertFrame(pFrames[videoCapt.curFrame], pFrames[nextFrame], videoCapt.timing.HActiveVideo, videoCapt.timing.VActiveVideo, DEMO_STRIDE); //
-void DemoInvertFrame(u8 *srcFrame, u8 *destFrame, u32 width, u32 height, u32 stride)
-{
-	u32 i,xhand,yhand;
-	long xx;
-	long yy;
-	u32 count;
-	u8 red,green,blue,Max,Min;
-	u32 xcoi, ycoi;
-	u32 lineStart = 0;
-	xx=0;yy=0; count=0;
-	for(ycoi = 0; ycoi < height; ycoi+=1)
-	{
-		for(xcoi = 0; xcoi < (width * 3); xcoi+=3)
-		{
-						green=srcFrame[xcoi + lineStart];
-						blue=srcFrame[xcoi + lineStart + 1];
-						red=srcFrame[xcoi + lineStart + 2];
-						if ( (red > 95) && (green > 40) && (blue > 20) && (red > blue) && (red > green) && (abs(red - green) > 15) ) {
-						if (blue >= green)
-			            {
-			                Max = blue;
-			                Min = green;
-			            }
-			            else
-			            {
-			                Max = green;
-			                Min = blue;
-			            }
-			            if (red > Max)
-			                Max = red;
-			            else if (red < Min)
-			                Min = red;
-
-			            if (Max - Min > 15) {
-			            yy=yy+ycoi;
-			            xx=xx+xcoi;
-			            count=count+1;
-						destFrame[xcoi + lineStart] = 255;      //Red
-						destFrame[xcoi + lineStart + 1] = 255; //Blue
-						destFrame[xcoi + lineStart + 2] = 255; //Green*/
-						}
-						}
-			            else {
-			            //do nothing
-			            		destFrame[xcoi + lineStart] = 0;      //Red     //painting  all black
-			            		destFrame[xcoi + lineStart + 1] = 0; //Blue
-			            		destFrame[xcoi + lineStart + 2] = 0; //Green
-			            }
-
-						} // } is for loop x
-		lineStart += stride;
-		}  // } is for loop y
-
-    yhand=yy/count*stride;
-	xhand=xx/count;
-	//xil_printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
-	//xil_printf("xhand %d\r\n", xhand);
-	//xil_printf("yhand  %d\r\n", yhand );
-	for (i=0;i<20;i++)
-	{destFrame[xhand+yhand + 3*i -30] = 255;
-	}     //Red
-
-	/*
-	 * Flush the framebuffer memory range to ensure changes are written to the
-	 * actual memory, and therefore accessible by the VDMA.
-	 */
-	Xil_DCacheFlushRange((unsigned int) destFrame, DEMO_MAX_FRAME);
-}
-
-
-/*
- * Bilinear interpolation algorithm. Assumes both frames have the same stride.
- */
-void DemoScaleFrame(u8 *srcFrame, u8 *destFrame, u32 srcWidth, u32 srcHeight, u32 destWidth, u32 destHeight, u32 stride)
-{
-	float xInc, yInc; // Width/height of a destination frame pixel in the source frame coordinate system
-	float xcoSrc, ycoSrc; // Location of the destination pixel being operated on in the source frame coordinate system
-	float x1y1, x2y1, x1y2, x2y2; //Used to store the color data of the four nearest source pixels to the destination pixel
-	int ix1y1, ix2y1, ix1y2, ix2y2; //indexes into the source frame for the four nearest source pixels to the destination pixel
-	float xDist, yDist; //distances between destination pixel and x1y1 source pixels in source frame coordinate system
-
-	int xcoDest, ycoDest; // Location of the destination pixel being operated on in the destination coordinate system
-	int iy1; //Used to store the index of the first source pixel in the line with y1
-	int iDest; //index of the pixel data in the destination frame being operated on
-
-	int i;
-
-	xInc = ((float) srcWidth - 1.0) / ((float) destWidth);
-	yInc = ((float) srcHeight - 1.0) / ((float) destHeight);
-
-	ycoSrc = 0.0;
-	for (ycoDest = 0; ycoDest < destHeight; ycoDest++)
-	{
-		iy1 = ((int) ycoSrc) * stride;
-		yDist = ycoSrc - ((float) ((int) ycoSrc));
-
-		/*
-		 * Save some cycles in the loop below by presetting the destination
-		 * index to the first pixel in the current line
-		 */
-		iDest = ycoDest * stride;
-
-		xcoSrc = 0.0;
-		for (xcoDest = 0; xcoDest < destWidth; xcoDest++)
-		{
-			ix1y1 = iy1 + ((int) xcoSrc) * 3;
-			ix2y1 = ix1y1 + 3;
-			ix1y2 = ix1y1 + stride;
-			ix2y2 = ix1y1 + stride + 3;
-
-			xDist = xcoSrc - ((float) ((int) xcoSrc));
-
-			/*
-			 * For loop handles all three colors
-			 */
-			for (i = 0; i < 3; i++)
-			{
-				x1y1 = (float) srcFrame[ix1y1 + i];
-				x2y1 = (float) srcFrame[ix2y1 + i];
-				x1y2 = (float) srcFrame[ix1y2 + i];
-				x2y2 = (float) srcFrame[ix2y2 + i];
-
-				/*
-				 * Bilinear interpolation function
-				 */
-				destFrame[iDest] = (u8) ((1.0-yDist)*((1.0-xDist)*x1y1+xDist*x2y1) + yDist*((1.0-xDist)*x1y2+xDist*x2y2));
-				iDest++;
-			}
-			xcoSrc += xInc;
-		}
-		ycoSrc += yInc;
-	}
-
-	/*
-	 * Flush the framebuffer memory range to ensure changes are written to the
-	 * actual memory, and therefore accessible by the VDMA.
-	 */
-	Xil_DCacheFlushRange((unsigned int) destFrame, DEMO_MAX_FRAME);
-
-	return;
 }
 
 void DemoPrintTest(u8 *frame, u32 width, u32 height, u32 stride, int pattern)
@@ -707,5 +634,3 @@ void DemoISR(void *callBackRef, void *pVideo)
 	char *data = (char *) callBackRef;
 	*data = 1; //set fRefresh to 1
 }
-
-
