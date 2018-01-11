@@ -306,8 +306,8 @@ void HandDetection(u8 *srcFrame, u8 *destFrame, u32 width, u32 height, u32 strid
 		lineStart += stride;
 	}  // } is for loop y
 
-	yhand = yy / count * stride;
-	xhand = xx / count;
+	yhand = yy / count;// * stride;
+	xhand = xx / count /3;
 	//xil_printf("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&");
 	//xil_printf("xhand %d\r\n", xhand);
 	//xil_printf("yhand  %d\r\n", yhand );
@@ -322,20 +322,20 @@ void HandDetection(u8 *srcFrame, u8 *destFrame, u32 width, u32 height, u32 strid
 	//Draw the center of the hand by 20 pixels
 	for (i=0;i<20;i++)
 	{
-		destFrame[xdst + ydst + 3*i -30] = 255;
+		destFrame[xhand + yhand + 3*i -30] = 255;
 	}*/
 
 	/*	-----------------------------------------------	*/
 	/*	determine Tetris control signals				*/
 	/*	-----------------------------------------------	*/
-	const u32 w_screen = 1366;	//or 1920
-	const u32 h_screen = 768;	//or 1080
+	const u32 w_screen = 1920;
+	const u32 h_screen = 1080;
 	const u32 left_border = w_screen/3;
 	const u32 right_border = 2*w_screen/3;
 	const u32 top_border = h_screen/3;
 	const u32 bottom_border = 2*h_screen/3;
 
-	u8 signal;//Tetris control signal
+	u8 signal = 5;//Tetris control signal
 
 	u8 flag_y = (yhand > top_border) && (yhand < bottom_border);
 	u8 flag_x = (xhand > left_border) && (xhand < right_border);
@@ -360,18 +360,15 @@ void HandDetection(u8 *srcFrame, u8 *destFrame, u32 width, u32 height, u32 strid
 		if(flag_x)
 			signal = 3;//bottom
 	}
-	else
+	else if(flag_x && flag_y)
 			signal = 4;//center
-
 
 	/*	-----------------------------------------------	*/
 	/*	write the control signal to a register			*/
 	/*	-----------------------------------------------	*/
-
-
-
-
-
+	xil_printf("xhand = %d\r\n", xhand);
+	//xil_printf("yhand = %d\r\n", yhand);
+	xil_printf("signal = %d\r\n\n", signal);
 
 
 	/* -----------------------------------------------------------------------	*/
